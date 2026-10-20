@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-white text-zinc-900 min-h-screen antialiased select-none overflow-hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
