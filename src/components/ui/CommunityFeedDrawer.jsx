@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { MessageSquare, Share2, Check, Send, X } from 'lucide-react';
@@ -9,34 +9,41 @@ export default function CommunityFeedDrawer({ fragrance, onOpenAuth, isOpen, onC
   const [newComment, setNewComment] = useState('');
   const [copied, setCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const fragranceId = fragrance?.id;
+
+  const loadComments = useCallback(async () => {
+    const { data } = await supabase
+      .from('fragrance_comments')
+      .select('*, profiles(username, avatar_url)')
+      .eq('fragrance_id', fragranceId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    setComments(data || []);
+  }, [fragranceId]);
 
   useEffect(() => {
-    if (!fragrance?.id || !isOpen) return;
-    loadComments();
+    if (!fragranceId || !isOpen) return;
+
+    const timeoutId = setTimeout(() => {
+      void loadComments();
+    }, 0);
 
     const channel = supabase
-      .channel(`comments_${fragrance.id}`)
+      .channel(`comments_${fragranceId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'fragrance_comments', filter: `fragrance_id=eq.${fragrance.id}` },
-        () => loadComments()
+        { event: 'INSERT', schema: 'public', table: 'fragrance_comments', filter: `fragrance_id=eq.${fragranceId}` },
+        () => {
+          void loadComments();
+        }
       )
       .subscribe();
 
     return () => {
+      clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
-  }, [fragrance?.id, isOpen]);
-
-  async function loadComments() {
-    const { data } = await supabase
-      .from('fragrance_comments')
-      .select('*, profiles(username, avatar_url)')
-      .eq('fragrance_id', fragrance.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    setComments(data || []);
-  }
+  }, [fragranceId, isOpen, loadComments]);
 
   async function handlePostComment(e) {
     e.preventDefault();

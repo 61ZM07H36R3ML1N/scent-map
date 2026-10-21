@@ -1,90 +1,121 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
-export function useFragranceGraph(initialFragranceId = null) {
+// Helper to normalize strings for comparison ("club-de-nuit-intense-man" vs "Club De Nuit Intense Man")
+function normalizeTitle(str) {
+  if (!str) return '';
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+export default function useFragranceGraph(initialFragranceId = null) {
   const [activeFragrance, setActiveFragrance] = useState(null);
   const [neighbors, setNeighbors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [genderFilter, setGenderFilter] = useState(null);
 
-  // 1. Fetch initial or default fragrance on mount
+  // 1. Initial Load
   useEffect(() => {
-  async function loadInitial() {
-    try {
-      setLoading(true);
+    async function loadInitial() {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams(window.location.search);
+        const urlFocusId = params.get('focus');
 
-      // Check URL parameters first: ?focus=uuid
-      const params = new URLSearchParams(window.location.search);
-      const urlFocusId = params.get('focus');
+        let query = supabase.from('fragrances').select('*');
+        if (urlFocusId) {
+          query = query.eq('id', urlFocusId);
+        } else if (initialFragranceId) {
+          query = query.eq('id', initialFragranceId);
+        } else {
+          query = query.limit(1);
+        }
 
-      let query = supabase.from('fragrances').select('*');
-      if (urlFocusId) {
-        query = query.eq('id', urlFocusId);
-      } else if (initialFragranceId) {
-        query = query.eq('id', initialFragranceId);
-      } else {
-        query = query.limit(1);
+        const { data, error } = await query.single();
+        if (error) throw error;
+        setActiveFragrance(data);
+      } catch (err) {
+        console.error('Error bootstrapping initial fragrance:', err);
+      } finally {
+        setLoading(false);
       }
-
-      const { data, error } = await query.single();
-      if (error) throw error;
-      setActiveFragrance(data);
-    } catch (err) {
-      console.error('Error bootstrapping initial fragrance:', err);
-    } finally {
-      setLoading(false);
     }
-  }
-  loadInitial();
-}, [initialFragranceId]);
+    loadInitial();
+  }, [initialFragranceId]);
 
-  // 2. Fetch neighbor cluster whenever activeFragrance changes
-  const fetchNeighbors = useCallback(async (targetId) => {
+  // 2. Fetch and Deduplicate Neighbors
+  const fetchNeighbors = useCallback(async (targetId, targetName, gender) => {
     if (!targetId) return;
 
     try {
+      // Let the effect finish before updating loading state.
       await Promise.resolve();
       setLoading(true);
-      const { data, error: rpcErr } = await supabase.rpc('get_similar_fragrances', {
+      const { data, error } = await supabase.rpc('get_similar_fragrances', {
         target_id: targetId,
-        match_limit: 24, // Keeps graph clean and legible without visual clutter
+        match_limit: 45, // Fetch slightly more so deduplication leaves a clean set of 20-24
+        filter_gender: gender || null,
       });
 
-      if (rpcErr) throw rpcErr;
-      setNeighbors(data || []);
+      if (error) throw error;
+
+      const rawList = data || [];
+      const normalizedTarget = normalizeTitle(targetName);
+
+      // Deduplication Matrix
+      const seenNames = new Set();
+      const uniqueCluster = [];
+
+      for (const item of rawList) {
+        const normItemName = normalizeTitle(item.name);
+
+        // Rule 1: Never show the center active bottle as a floating neighbor
+        if (normItemName === normalizedTarget || item.id === targetId) {
+          continue;
+        }
+
+        // Rule 2: Keep only the first (highest similarity) occurrence of a fragrance title
+        if (!seenNames.has(normItemName)) {
+          seenNames.add(normItemName);
+          uniqueCluster.push(item);
+        }
+
+        // Limit the visible cluster to 22 clean, distinct nodes
+        if (uniqueCluster.length >= 22) break;
+      }
+
+      setNeighbors(uniqueCluster);
     } catch (err) {
       console.error('Failed to load similar fragrance cluster:', err);
-      setError(err.message);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (activeFragrance?.id) {
-      const timeoutId = setTimeout(() => {
-        fetchNeighbors(activeFragrance.id);
-      }, 0);
+    if (!activeFragrance?.id) return;
 
-      return () => clearTimeout(timeoutId);
-    }
-  }, [activeFragrance, fetchNeighbors]);
+    const timer = window.setTimeout(() => {
+      fetchNeighbors(activeFragrance.id, activeFragrance.name, genderFilter);
+    }, 0);
 
-  // Function to switch focus directly
+    return () => window.clearTimeout(timer);
+  }, [activeFragrance, genderFilter, fetchNeighbors]);
+
   const focusFragrance = (fragrance) => {
-  setActiveFragrance(fragrance);
-  if (fragrance?.id) {
-    const url = new URL(window.location);
-    url.searchParams.set('focus', fragrance.id);
-    window.history.replaceState({}, '', url);
-  }
-};
+    setActiveFragrance(fragrance);
+    if (fragrance?.id) {
+      const url = new URL(window.location);
+      url.searchParams.set('focus', fragrance.id);
+      window.history.replaceState({}, '', url);
+    }
+  };
 
   return {
     activeFragrance,
     neighbors,
     loading,
-    error,
+    genderFilter,
+    setGenderFilter,
     focusFragrance,
   };
 }
