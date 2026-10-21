@@ -25,7 +25,8 @@ export default function App() {
   const [isShelfActive, setIsShelfActive] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [dnaModalOpen, setDnaModalOpen] = useState(false); // <-- DNA state
+  const [dnaModalOpen, setDnaModalOpen] = useState(false);
+  const [communityDrawerOpen, setCommunityDrawerOpen] = useState(false);
 
   const visibleNeighbors = useMemo(() => {
     if (!isShelfActive) return neighbors;
@@ -74,9 +75,11 @@ export default function App() {
             {activeFragrance && (
               <CommunityFeedDrawer
                 fragrance={activeFragrance}
+                isOpen={communityDrawerOpen}
+                onClose={() => setCommunityDrawerOpen(false)}
                 onOpenAuth={() => setAuthModalOpen(true)}
-              />
-            )}
+  />
+)}
           </>
         )}
       </main>
