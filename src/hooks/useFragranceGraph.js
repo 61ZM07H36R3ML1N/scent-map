@@ -7,7 +7,7 @@ function normalizeTitle(str) {
   return str.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-export default function useFragranceGraph(initialFragranceId = null) {
+export function useFragranceGraph(initialFragranceId = null) {
   const [activeFragrance, setActiveFragrance] = useState(null);
   const [neighbors, setNeighbors] = useState([]);
   const [loading, setLoading] = useState(true);
