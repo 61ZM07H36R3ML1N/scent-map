@@ -47,12 +47,10 @@ export function useFragranceGraph(initialFragranceId = null) {
     if (!targetId) return;
 
     try {
-      // Let the effect finish before updating loading state.
-      await Promise.resolve();
       setLoading(true);
       const { data, error } = await supabase.rpc('get_similar_fragrances', {
         target_id: targetId,
-        match_limit: 45, // Fetch slightly more so deduplication leaves a clean set of 20-24
+        match_limit: 45,
         filter_gender: gender || null,
       });
 
@@ -61,25 +59,23 @@ export function useFragranceGraph(initialFragranceId = null) {
       const rawList = data || [];
       const normalizedTarget = normalizeTitle(targetName);
 
-      // Deduplication Matrix
       const seenNames = new Set();
       const uniqueCluster = [];
 
       for (const item of rawList) {
         const normItemName = normalizeTitle(item.name);
 
-        // Rule 1: Never show the center active bottle as a floating neighbor
+        // Never show the center active bottle as a floating neighbor
         if (normItemName === normalizedTarget || item.id === targetId) {
           continue;
         }
 
-        // Rule 2: Keep only the first (highest similarity) occurrence of a fragrance title
+        // Keep only first occurrence of duplicate titles
         if (!seenNames.has(normItemName)) {
           seenNames.add(normItemName);
           uniqueCluster.push(item);
         }
 
-        // Limit the visible cluster to 22 clean, distinct nodes
         if (uniqueCluster.length >= 22) break;
       }
 
@@ -92,13 +88,9 @@ export function useFragranceGraph(initialFragranceId = null) {
   }, []);
 
   useEffect(() => {
-    if (!activeFragrance?.id) return;
-
-    const timer = window.setTimeout(() => {
+    if (activeFragrance?.id) {
       fetchNeighbors(activeFragrance.id, activeFragrance.name, genderFilter);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
+    }
   }, [activeFragrance, genderFilter, fetchNeighbors]);
 
   const focusFragrance = (fragrance) => {
@@ -119,3 +111,5 @@ export function useFragranceGraph(initialFragranceId = null) {
     focusFragrance,
   };
 }
+
+export default useFragranceGraph;
