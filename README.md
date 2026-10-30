@@ -66,3 +66,6 @@ scent-map/
 │   ├── App.jsx                     # Root application layout coordinator
 │   ├── index.css                   # Tailwind CSS v4 root styling
 │   └── main.jsx                    # App mount & context wrapper
+
+## License
+Proprietary. © 2026 Brian Jamiel. All rights reserved. Commercial use, reproduction, or distribution is strictly prohibited.
